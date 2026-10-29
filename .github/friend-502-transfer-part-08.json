@@ -1,0 +1,22 @@
+{
+  "files": [
+    {
+      "name": "piece-008.txt",
+      "shas": [
+        "71288562bd60b7c9cc2034bd96e0400cb8ed62d6",
+        "4a39e8d9ef723722ad75da8823dd8f587308cff2",
+        "84cfa512e4dff48b79c51a3b8f4ff54d296426cb",
+        "fdb00eee30183c7baaedfd1e274e1887a5797019"
+      ]
+    },
+    {
+      "name": "piece-009.txt",
+      "shas": [
+        "ed986949875deaf4cb76fb8aa6e7ed07a437b894",
+        "30efe33de905ff62d47c31914dcbcd5e51b5ba84",
+        "2c978fa279050f6f3c95323f00dc65a045af7ae6",
+        "5654d816d5984c0c37b7bbccfd9f0ddb55e6644f"
+      ]
+    }
+  ]
+}
