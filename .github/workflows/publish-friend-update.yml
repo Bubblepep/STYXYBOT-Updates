@@ -1,0 +1,73 @@
+name: Publish STYXYBOT licensed FRIEND update
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/update-bridge.json
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct protected APK from verified transfer blobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64,hashlib,json,os,subprocess
+          from pathlib import Path
+          manifest=json.loads(Path('.github/update-bridge.json').read_text())
+          assert manifest['version']==502
+          assert manifest['package']=='com.styxy.bot.friendbeta'
+          assert manifest['sha256']=='007a777abb568594107f1b2ef35e677d6683aca795ef8f1b6eb3b7f840581974'
+          sha_list=manifest['piece_blob_shas']
+          assert 10<=len(sha_list)<=100
+          chunks=[]
+          for sha in sha_list:
+              assert len(sha)==40 and all(c in '0123456789abcdef' for c in sha)
+              data=subprocess.check_output(['gh','api','repos/Bubblepep/STYXYBOT-Updates/git/blobs/'+sha],text=True)
+              blob=json.loads(data)
+              assert blob['encoding']=='base64'
+              part=base64.b64decode(blob['content'])
+              assert 0<len(part)<=4*1024*1024
+              chunks.append(part)
+          apk=base64.b64decode(b''.join(chunks),validate=True)
+          assert len(apk)==58860567
+          assert hashlib.sha256(apk).hexdigest()==manifest['sha256']
+          Path('STYXYBOT-com.styxy.bot.friendbeta-v502.apk').write_bytes(apk)
+          print('Reconstructed and SHA256-verified protected FRIEND APK, 502',len(apk))
+          PY
+      - name: Verify package, version and signer continuity from public #444
+        run: |
+          set -euo pipefail
+          APK=STYXYBOT-com.styxy.bot.friendbeta-v502.apk
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify "$APK"
+          "$BUILD_TOOLS/aapt" dump badging "$APK" > apk-badging.txt
+          grep -E "^package: name='com.styxy.bot.friendbeta' versionCode='502'" apk-badging.txt
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://github.com/Bubblepep/STYXYBOT-Updates/releases/download/v0.89-build444/STYXYBOT-com.styxy.bot.friendbeta-v444.apk" \
+            -o previous-friend.apk
+          echo "20e6affc7c8ac57426ae3f69a696176c56d400a4978f71134bc7421f51847462  previous-friend.apk" | sha256sum --check
+          "$BUILD_TOOLS/apksigner" verify previous-friend.apk
+          NEW_CERT="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | grep '^Signer #1 certificate SHA-256 digest: ' | head -1)"
+          OLD_CERT="$("$BUILD_TOOLS/apksigner" verify --print-certs previous-friend.apk | grep '^Signer #1 certificate SHA-256 digest: ' | head -1)"
+          test -n "$NEW_CERT" && test "$NEW_CERT" = "$OLD_CERT"
+          echo "Signing certificate matches the public FRIEND #444 APK"
+      - name: Publish discoverable public update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=v0.92-build502
+          gh release create "$TAG" \
+            "STYXYBOT-com.styxy.bot.friendbeta-v502.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "STYXYBOT FRIEND licensed test update - build 502" \
+            --notes "Protected FRIEND edition for owner-requested physical-phone testing. Activation, energy purchases, completion notifications, and Street Wars are NOT yet validated. This is a test update, not production certification. APK SHA-256 and Android signer are verified against the prior public FRIEND build. Install requires Android approval; do not uninstall the existing app." \
+            --latest
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,assets,isLatest,url
